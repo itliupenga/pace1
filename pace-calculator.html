@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>跑步计算器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#6366F1',
+                        neutral: '#F3F4F6',
+                        dark: '#1F2937'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .picker-item {
+                @apply py-3 text-center transition-all duration-300 ease-out;
+            }
+            .picker-item-selected {
+                @apply text-primary font-bold text-xl scale-110;
+            }
+            .picker-wrapper {
+                @apply relative h-40 overflow-hidden rounded-lg border border-gray-300 bg-white shadow-md;
+            }
+            .picker-mask {
+                @apply absolute inset-0 pointer-events-none;
+                background: linear-gradient(to bottom, 
+                    rgba(255,255,255,0.9) 0%, 
+                    rgba(255,255,255,0) 25%, 
+                    rgba(255,255,255,0) 75%, 
+                    rgba(255,255,255,0.9) 100%);
+            }
+            .picker-highlight {
+                @apply absolute left-0 right-0 h-12 top-1/2 -translate-y-1/2 border-y border-gray-300 pointer-events-none;
+            }
+            .toggle-wrapper {
+                @apply relative w-36 h-12 rounded-full bg-gray-200 transition-colors duration-300 cursor-pointer;
+            }
+            .toggle-wrapper.active {
+                @apply bg-accent;
+            }
+            .toggle-dot {
+                @apply absolute left-1 top-1 w-10 h-10 rounded-full bg-white shadow transition-transform duration-300;
+            }
+            .toggle-wrapper.active .toggle-dot {
+                @apply transform translate-x-24;
+            }
+            .toggle-label {
+                @apply absolute top-1/2 -translate-y-1/2 text-xs font-medium transition-opacity duration-200;
+            }
+            .toggle-label-left {
+                @apply left-6 text-gray-700;
+            }
+            .toggle-label-right {
+                @apply right-6 text-gray-500;
+            }
+            .toggle-wrapper.active .toggle-label-left {
+                @apply text-gray-500;
+            }
+            .toggle-wrapper.active .toggle-label-right {
+                @apply text-white;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen font-sans text-dark flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden transform transition-all duration-300 hover:shadow-2xl">
+        <!-- 标题区域 -->
+        <div class="bg-primary text-white p-6 text-center">
+            <h1 class="text-[clamp(1.5rem,3vw,2rem)] font-bold">跑步计算器</h1>
+            <p class="text-blue-100 mt-1" id="modeDescription">计算您的跑步配速或完成时间</p>
+        </div>
+        
+        <!-- 主要内容区域 -->
+        <div class="p-6">
+            <!-- 距离选择器 -->
+            <div class="mb-8">
+                <label class="block text-gray-700 font-medium mb-2 text-left">选择距离</label>
+                <div class="picker-wrapper" id="distancePicker">
+                    <div class="picker-scroll" id="distanceScroll">
+                        <div class="picker-item">1KM</div>
+                        <div class="picker-item">5KM</div>
+                        <div class="picker-item">10KM</div>
+                        <div class="picker-item">21.0975KM</div>
+                        <div class="picker-item">42.195KM</div>
+                    </div>
+                    <div class="picker-highlight"></div>
+                    <div class="picker-mask"></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1 text-center">滑动选择跑步距离（支持循环滚动）</p>
+            </div>
+            
+            <!-- 模式切换开关 -->
+            <div class="mb-8 flex flex-col items-center">
+                <div class="toggle-wrapper mb-2" id="modeToggle">
+                    <div class="toggle-dot"></div>
+                    <span class="toggle-label toggle-label-left">计算配速</span>
+                    <span class="toggle-label toggle-label-right">计算时间</span>
+                </div>
+                <p class="text-xs text-gray-500">滑动切换计算模式</p>
+            </div>
+            
+            <!-- 时间/配速选择器 -->
+            <div class="mb-8">
+                <label class="block text-gray-700 font-medium mb-2 text-left" id="timeOrPaceLabel">选择时间</label>
+                <div class="flex justify-between gap-2" id="timeSelector">
+                    <!-- 小时选择 -->
+                    <div class="flex-1">
+                        <div class="picker-wrapper" id="hourPicker">
+                            <div class="picker-scroll" id="hourScroll">
+                                <!-- 动态生成0-23小时 -->
+                            </div>
+                            <div class="picker-highlight"></div>
+                            <div class="picker-mask"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">小时</p>
+                    </div>
+                    
+                    <!-- 分钟选择 -->
+                    <div class="flex-1">
+                        <div class="picker-wrapper" id="minutePicker">
+                            <div class="picker-scroll" id="minuteScroll">
+                                <!-- 动态生成0-59分钟 -->
+                            </div>
+                            <div class="picker-highlight"></div>
+                            <div class="picker-mask"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">分钟</p>
+                    </div>
+                    
+                    <!-- 秒钟选择 -->
+                    <div class="flex-1">
+                        <div class="picker-wrapper" id="secondPicker">
+                            <div class="picker-scroll" id="secondScroll">
+                                <!-- 动态生成0-59秒钟 -->
+                            </div>
+                            <div class="picker-highlight"></div>
+                            <div class="picker-mask"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">秒钟</p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between gap-2" id="paceSelector" style="display: none;">
+                    <!-- 分钟选择 -->
+                    <div class="flex-1">
+                        <div class="picker-wrapper" id="paceMinutePicker">
+                            <div class="picker-scroll" id="paceMinuteScroll">
+                                <!-- 动态生成0-20分钟 -->
+                            </div>
+                            <div class="picker-highlight"></div>
+                            <div class="picker-mask"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">分钟</p>
+                    </div>
+                    
+                    <!-- 秒钟选择 -->
+                    <div class="flex-1">
+                        <div class="picker-wrapper" id="paceSecondPicker">
+                            <div class="picker-scroll" id="paceSecondScroll">
+                                <!-- 动态生成0-59秒钟 -->
+                            </div>
+                            <div class="picker-highlight"></div>
+                            <div class="picker-mask"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">秒钟</p>
+                    </div>
+                    
+                    <div class="flex-1 flex items-center justify-center">
+                        <div class="text-lg font-medium text-gray-500">/公里</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 计算按钮 -->
+            <div class="flex gap-3">
+                <button id="calculatePaceBtn" class="w-full bg-secondary hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-md hover:shadow-lg">
+                    <i class="fa fa-tachometer"></i>
+                    <span>计算配速</span>
+                </button>
+                
+                <button id="calculateTimeBtn" class="w-full bg-accent hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-md hover:shadow-lg" style="display: none;">
+                    <i class="fa fa-clock-o"></i>
+                    <span>计算时间</span>
+                </button>
+            </div>
+            
+            <!-- 结果显示区域 -->
+            <div id="resultArea" class="mt-8 p-5 bg-neutral rounded-xl text-center" style="display: none;">
+                <h2 class="text-lg font-semibold text-gray-700 mb-2" id="resultTitle">您的配速 (基于 <span id="usedDistance" class="text-primary font-bold"></span>)</h2>
+                <div id="calculationResult" class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-primary"></div>
+                <p class="text-gray-600 mt-2 text-sm" id="resultDescription">每公里所需时间</p>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="mt-8 text-gray-500 text-sm">
+        <p>根据选择的距离和时间/配速进行计算</p>
+    </footer>
+
+    <script>
+        // 全局状态管理
+        const state = {
+            isCalculateTimeMode: false,
+            distancePicker: null,
+            hourPicker: null,
+            minutePicker: null,
+            secondPicker: null,
+            paceMinutePicker: null,
+            paceSecondPicker: null
+        };
+        
+        // DOM 元素缓存
+        const elements = {
+            modeToggle: document.getElementById('modeToggle'),
+            modeDescription: document.getElementById('modeDescription'),
+            timeOrPaceLabel: document.getElementById('timeOrPaceLabel'),
+            timeSelector: document.getElementById('timeSelector'),
+            paceSelector: document.getElementById('paceSelector'),
+            calculatePaceBtn: document.getElementById('calculatePaceBtn'),
+            calculateTimeBtn: document.getElementById('calculateTimeBtn'),
+            resultArea: document.getElementById('resultArea'),
+            resultTitle: document.getElementById('resultTitle'),
+            calculationResult: document.getElementById('calculationResult'),
+            resultDescription: document.getElementById('resultDescription'),
+            usedDistance: document.getElementById('usedDistance')
+        };
+        
+        // 初始化应用
+        function initApp() {
+            // 初始化所有选择器
+            initTimePickers();
+            initPacePickers();
+            
+            // 创建选择器实例并存储在状态中
+            state.distancePicker = createPicker('distancePicker', 0, true);
+            state.hourPicker = createPicker('hourPicker', 0, true);
+            state.minutePicker = createPicker('minutePicker', 0, true);
+            state.secondPicker = createPicker('secondPicker', 0, true);
+            state.paceMinutePicker = createPicker('paceMinutePicker', 5, true);
+            state.paceSecondPicker = createPicker('paceSecondPicker', 0, true);
+            
+            // 绑定所有事件处理程序
+            bindEvents();
+        }
+        
+        // 初始化时间选择器选项
+        function initTimePickers() {
+            const hourScroll = document.getElementById('hourScroll');
+            const minuteScroll = document.getElementById('minuteScroll');
+            const secondScroll = document.getElementById('secondScroll');
+            
+            // 生成小时选项 (0-23)
+            for (let i = 0; i <= 23; i++) {
+                const item = document.createElement('div');
+                item.className = 'picker-item';
+                item.textContent = i.toString().padStart(2, '0');
+                hourScroll.appendChild(item);
+            }
+            
+            // 生成分钟选项 (0-59)
+            for (let i = 0; i <= 59; i++) {
+                const item = document.createElement('div');
+                item.className = 'picker-item';
+                item.textContent = i.toString().padStart(2, '0');
+                minuteScroll.appendChild(item);
+            }
+            
+            // 生成秒钟选项 (0-59)
+            for (let i = 0; i <= 59; i++) {
+                const item = document.createElement('div');
+                item.className = 'picker-item';
+                item.textContent = i.toString().padStart(2, '0');
+                secondScroll.appendChild(item);
+            }
+        }
+        
+        // 初始化配速选择器选项
+        function initPacePickers() {
+            const paceMinuteScroll = document.getElementById('paceMinuteScroll');
+            const paceSecondScroll = document.getElementById('paceSecondScroll');
+            
+            // 生成配速分钟选项 (0-20)
+            for (let i = 0; i <= 20; i++) {
+                const item = document.createElement('div');
+                item.className = 'picker-item';
+                item.textContent = i.toString();
+                paceMinuteScroll.appendChild(item);
+            }
+            
+            // 生成配速秒钟选项 (0-59)
+            for (let i = 0; i <= 59; i++) {
+                const item = document.createElement('div');
+                item.className = 'picker-item';
+                item.textContent = i.toString().padStart(2, '0');
+                paceSecondScroll.appendChild(item);
+            }
+        }
+        
+        // 创建选择器实例，添加循环滚动功能
+        // loop参数控制是否启用循环滚动
+        function createPicker(pickerId, defaultIndex, loop = false) {
+            const picker = document.getElementById(pickerId);
+            const scroll = picker.querySelector('.picker-scroll');
+            const items = scroll.querySelectorAll('.picker-item');
+            const itemHeight = 48;
+            const visibleItems = 3;
+            const startOffset = (visibleItems - 1) / 2 * itemHeight;
+            let currentIndex = defaultIndex;
+            
+            // 更新滚动位置和选中状态
+            function updateScrollPosition() {
+                const scrollPosition = currentIndex * itemHeight - startOffset;
+                scroll.style.transform = `translateY(-${scrollPosition}px)`;
+                scroll.style.transition = 'transform 0.3s ease-out';
+                
+                items.forEach((item, index) => {
+                    if (index === currentIndex) {
+                        item.classList.add('picker-item-selected');
+                    } else {
+                        item.classList.remove('picker-item-selected');
+                    }
+                });
+            }
+            
+            // 初始化位置
+            updateScrollPosition();
+            
+            // 触摸滑动变量
+            let startY = 0;
+            let isDragging = false;
+            
+            // 事件处理函数
+            function startDrag(e) {
+                isDragging = true;
+                startY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
+                scroll.style.transition = 'none';
+            }
+            
+            function drag(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                
+                const clientY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
+                const diff = startY - clientY;
+                let newIndex = Math.round(currentIndex + diff / itemHeight);
+                
+                // 实现循环滚动逻辑
+                if (loop) {
+                    if (newIndex < 0) {
+                        // 向上滚动超过最小值，循环到最大值
+                        newIndex = items.length - 1;
+                    } else if (newIndex >= items.length) {
+                        // 向下滚动超过最大值，循环到最小值
+                        newIndex = 0;
+                    }
+                } else {
+                    // 非循环模式，限制在范围内
+                    newIndex = Math.max(0, Math.min(newIndex, items.length - 1));
+                }
+                
+                if (newIndex !== currentIndex) {
+                    currentIndex = newIndex;
+                    updateScrollPosition();
+                    startY = clientY;
+                }
+            }
+            
+            function endDrag() {
+                if (!isDragging) return;
+                isDragging = false;
+                updateScrollPosition();
+                
+                // 任何选择器变化都隐藏结果
+                elements.resultArea.style.display = 'none';
+            }
+            
+            // 绑定滑动事件
+            picker.addEventListener('mousedown', startDrag);
+            picker.addEventListener('touchstart', startDrag, { passive: true });
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag, { passive: true });
+            
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+            
+            // 点击选择 - 实现向上点击循环
+            items.forEach((item, index) => {
+                item.addEventListener('click', () => {
+                    // 计算点击位置与当前选中项的相对位置
+                    const diff = index - currentIndex;
+                    
+                    // 如果点击位置在当前项上方（向上点击）且当前是第一项
+                    if (diff < 0 && currentIndex === 0 && loop) {
+                        currentIndex = items.length - 1;
+                    } 
+                    // 如果点击位置在当前项下方（向下点击）且当前是最后一项
+                    else if (diff > 0 && currentIndex === items.length - 1 && loop) {
+                        currentIndex = 0;
+                    } 
+                    // 正常点击
+                    else {
+                        currentIndex = index;
+                    }
+                    
+                    updateScrollPosition();
+                    elements.resultArea.style.display = 'none';
+                });
+            });
+            
+            // 返回选择器公共方法
+            return {
+                getValue: () => items[currentIndex].textContent,
+                getElement: () => picker,
+                getIndex: () => currentIndex
+            };
+        }
+        
+        // 绑定所有事件
+        function bindEvents() {
+            // 模式切换事件
+            elements.modeToggle.addEventListener('click', toggleMode);
+            
+            // 计算按钮事件
+            elements.calculatePaceBtn.addEventListener('click', calculatePace);
+            elements.calculateTimeBtn.addEventListener('click', calculateTime);
+        }
+        
+        // 切换计算模式
+        function toggleMode() {
+            state.isCalculateTimeMode = !state.isCalculateTimeMode;
+            
+            // 更新UI
+            elements.modeToggle.classList.toggle('active', state.isCalculateTimeMode);
+            
+            if (state.isCalculateTimeMode) {
+                // 计算时间模式
+                elements.timeSelector.style.display = 'none';
+                elements.paceSelector.style.display = 'flex';
+                elements.calculatePaceBtn.style.display = 'none';
+                elements.calculateTimeBtn.style.display = 'flex';
+                elements.timeOrPaceLabel.textContent = '选择配速';
+                elements.modeDescription.textContent = '根据距离和配速计算完成时间';
+            } else {
+                // 计算配速模式
+                elements.timeSelector.style.display = 'flex';
+                elements.paceSelector.style.display = 'none';
+                elements.calculatePaceBtn.style.display = 'flex';
+                elements.calculateTimeBtn.style.display = 'none';
+                elements.timeOrPaceLabel.textContent = '选择时间';
+                elements.modeDescription.textContent = '根据距离和时间计算配速';
+            }
+            
+            // 隐藏结果
+            elements.resultArea.style.display = 'none';
+        }
+        
+        // 计算配速
+        function calculatePace() {
+            try {
+                // 获取选择的值
+                const distanceText = state.distancePicker.getValue();
+                const distance = parseFloat(distanceText.replace('KM', ''));
+                
+                const hours = parseInt(state.hourPicker.getValue());
+                const minutes = parseInt(state.minutePicker.getValue());
+                const seconds = parseInt(state.secondPicker.getValue());
+                
+                // 计算总时间（秒）
+                const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+                
+                // 验证输入
+                if (totalSeconds <= 0) {
+                    alert('请输入有效的时间');
+                    return;
+                }
+                
+                // 计算配速
+                const paceSecondsPerKm = totalSeconds / distance;
+                const paceMinutes = Math.floor(paceSecondsPerKm / 60);
+                const paceSeconds = Math.round(paceSecondsPerKm % 60);
+                
+                // 更新结果
+                elements.usedDistance.textContent = distanceText;
+                elements.resultTitle.innerHTML = `您的配速 (基于 <span class="text-primary font-bold">${distanceText}</span>)`;
+                elements.calculationResult.textContent = `${paceMinutes}分${paceSeconds.toString().padStart(2, '0')}秒/公里`;
+                elements.resultDescription.textContent = '每公里所需时间';
+                
+                // 显示结果
+                showResult();
+            } catch (error) {
+                console.error('计算配速时出错:', error);
+                alert('计算出错，请检查您的输入');
+            }
+        }
+        
+        // 计算完成时间
+        function calculateTime() {
+            try {
+                // 获取选择的值
+                const distanceText = state.distancePicker.getValue();
+                const distance = parseFloat(distanceText.replace('KM', ''));
+                
+                const paceMinutes = parseInt(state.paceMinutePicker.getValue());
+                const paceSeconds = parseInt(state.paceSecondPicker.getValue());
+                
+                // 验证输入
+                if (paceMinutes <= 0 && paceSeconds <= 0) {
+                    alert('请输入有效的配速');
+                    return;
+                }
+                
+                // 计算总时间
+                const paceSecondsPerKm = paceMinutes * 60 + paceSeconds;
+                const totalSeconds = distance * paceSecondsPerKm;
+                
+                // 转换为时分秒
+                const hours = Math.floor(totalSeconds / 3600);
+                const remainingSeconds = totalSeconds % 3600;
+                const minutes = Math.floor(remainingSeconds / 60);
+                const seconds = Math.round(remainingSeconds % 60);
+                
+                // 格式化输出
+                let timeString = '';
+                if (hours > 0) {
+                    timeString += `${hours}小时`;
+                }
+                timeString += `${minutes}分${seconds.toString().padStart(2, '0')}秒`;
+                
+                // 更新结果
+                elements.usedDistance.textContent = distanceText;
+                elements.resultTitle.innerHTML = `预计完成时间 (基于 <span class="text-primary font-bold">${distanceText}</span>)`;
+                elements.calculationResult.textContent = timeString;
+                elements.resultDescription.textContent = `以 ${paceMinutes}分${paceSeconds.toString().padStart(2, '0')}秒/公里 配速`;
+                
+                // 显示结果
+                showResult();
+            } catch (error) {
+                console.error('计算时间时出错:', error);
+                alert('计算出错，请检查您的输入');
+            }
+        }
+        
+        // 显示结果并添加动画
+        function showResult() {
+            elements.resultArea.style.display = 'block';
+            elements.resultArea.style.opacity = '0';
+            elements.resultArea.style.transform = 'translateY(20px)';
+            elements.resultArea.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            
+            setTimeout(() => {
+                elements.resultArea.style.opacity = '1';
+                elements.resultArea.style.transform = 'translateY(0)';
+            }, 10);
+        }
+        
+        // 页面加载完成后初始化应用
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
